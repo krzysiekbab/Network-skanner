@@ -16,9 +16,13 @@ python app.py
 
 Server runs at: `http://127.0.0.1:4000`
 
+**Swagger Documentation:** `http://127.0.0.1:4000/api-docs`
+
 ---
 
 ## API Endpoints
+
+Access interactive API documentation at: **http://127.0.0.1:4000/api-docs**
 
 | Endpoint | Method | Purpose | Speed |
 |----------|--------|---------|-------|
@@ -136,6 +140,7 @@ done
 ✅ Status monitoring with latency  
 ✅ Thread-safe operations  
 ✅ No root required (for most features)  
+✅ **Interactive Swagger/OpenAPI documentation**
 
 ---
 
@@ -144,6 +149,8 @@ done
 - Flask 3.0.0 - Web framework
 - Scapy 2.5.0 - ARP scanning
 - mac-vendor-lookup 0.1.12 - Vendor identification
+- flasgger 0.9.7.1 - Swagger/OpenAPI documentation
+- flask-swagger-ui 4.11.1 - Swagger UI interface
 
 Install: `pip install -r requirements.txt`
 
@@ -155,3 +162,4 @@ Install: `pip install -r requirements.txt`
 - ARP scanning may require sudo on some systems
 - Port scanning: 21, 22, 23, 25, 80, 443, 445, 3389, 8080, 8443
 - `/scan` discovers devices, `/monitor` tracks known devices
+- **Many devices (iPhones, Macs, IoT) block ICMP ping** - they may show OFFLINE in `/monitor` even when connected. This is normal security behavior. Use `/scan` or `/detailed-scan` for accurate device discovery.

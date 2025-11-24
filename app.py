@@ -7,8 +7,50 @@ import struct
 import subprocess
 import platform
 from mac_vendor_lookup import MacLookup
+from flasgger import Swagger
 
 app = Flask(__name__)
+
+# Swagger configuration
+swagger_config = {
+    "headers": [],
+    "specs": [
+        {
+            "endpoint": 'apispec',
+            "route": '/apispec.json',
+            "rule_filter": lambda rule: True,
+            "model_filter": lambda tag: True,
+        }
+    ],
+    "static_url_path": "/flasgger_static",
+    "swagger_ui": True,
+    "specs_route": "/api-docs"
+}
+
+swagger_template = {
+    "swagger": "2.0",
+    "info": {
+        "title": "Network Scanner REST API",
+        "description": "REST API for network monitoring and device discovery with hostname, vendor, and port scanning capabilities.",
+        "version": "1.0.0",
+        "contact": {
+            "name": "Network Scanner API"
+        }
+    },
+    "schemes": ["http"],
+    "tags": [
+        {
+            "name": "Network Discovery",
+            "description": "Endpoints for network detection and device scanning"
+        },
+        {
+            "name": "Device Management",
+            "description": "Endpoints for managing and monitoring discovered devices"
+        }
+    ]
+}
+
+swagger = Swagger(app, config=swagger_config, template=swagger_template)
 
 # Global variable to store scan results in RAM
 discovered_devices = []
@@ -43,11 +85,17 @@ def ping_host(host, timeout=1):
     """
     try:
         # Determine ping command based on OS
-        param = '-n' if platform.system().lower() == 'windows' else '-c'
-        timeout_param = '-W' if platform.system().lower() != 'windows' else '-w'
+        system = platform.system().lower()
         
-        # Build command: ping -c 1 -W 1 <host>
-        command = ['ping', param, '1', timeout_param, str(int(timeout * 1000)), host]
+        if system == 'windows':
+            # Windows: -n count, -w timeout_in_ms
+            command = ['ping', '-n', '1', '-w', str(int(timeout * 1000)), host]
+        elif system == 'darwin':
+            # macOS: -c count, -W timeout_in_ms, -t timeout_in_seconds
+            command = ['ping', '-c', '1', '-W', str(int(timeout * 1000)), host]
+        else:
+            # Linux: -c count, -W timeout_in_seconds
+            command = ['ping', '-c', '1', '-W', str(int(timeout)), host]
         
         # Execute ping
         result = subprocess.run(
@@ -182,7 +230,7 @@ def perform_arp_scan(ip_range):
             devices.append({
                 "ip": received.psrc,
                 "mac": received.hwsrc,
-                "status": "ONLINE" # If it responded to ARP, it means it's online
+                "status": "ONLINE"
             })
         return devices
     except Exception as e:
@@ -191,12 +239,40 @@ def perform_arp_scan(ip_range):
 
 @app.route('/')
 def index():
+    """
+    Welcome message
+    ---
+    tags:
+      - Network Discovery
+    responses:
+      200:
+        description: Welcome message
+        examples:
+          application/json:
+            message: "Welcome to Network Monitoring API (Flask Version)"
+    """
     return jsonify({"message": "Welcome to Network Monitoring API (Flask Version)"})
 
 @app.route('/detect-network', methods=['GET'])
 def detect_network():
     """
-    Endpoint automatically detecting local network.
+    Auto-detect local network
+    ---
+    tags:
+      - Network Discovery
+    responses:
+      200:
+        description: Network info (local_ip, network, netmask, cidr)
+        examples:
+          application/json:
+            message: "Network detected successfully"
+            local_ip: "192.168.0.100"
+            network: "192.168.0.0/24"
+            netmask: "255.255.255.0"
+            cidr: 24
+            info: "Use this range in /scan?network=192.168.0.0/24"
+      500:
+        description: Detection failed
     """
     try:
         network_info = detect_local_network()
@@ -223,14 +299,45 @@ def detect_network():
 @app.route('/scan', methods=['POST'])
 def scan_network():
     """
-    Endpoint forcing network scan.
-    You can provide a parameter in URL, e.g.: /scan?network=192.168.0.0/24
+    Basic ARP scan (IP, MAC, Status)
+    ---
+    tags:
+      - Network Discovery
+    parameters:
+      - name: network
+        in: query
+        type: string
+        default: "192.168.1.0/24"
+        description: CIDR format (e.g., 192.168.0.0/24)
+    responses:
+      200:
+        description: Devices found with IP, MAC, status
+        examples:
+          application/json:
+            message: "Scan completed"
+            count: 3
+            network_scanned: "192.168.0.0/24"
+            devices:
+              - ip: "192.168.0.1"
+                mac: "00:11:22:33:44:55"
+                status: "ONLINE"
+              - ip: "192.168.0.10"
+                mac: "aa:bb:cc:dd:ee:ff"
+                status: "ONLINE"
+      400:
+        description: Invalid CIDR format
     """
     global discovered_devices
     
     try:
-        # Get network from query parameters, default 192.168.1.0/24
-        network = request.args.get('network', '192.168.1.0/24')
+        # Get network from query parameters or auto-detect
+        network = request.args.get('network')
+        if not network:
+            network_info = detect_local_network()
+            if network_info:
+                network = network_info['network']
+            else:
+                network = '192.168.1.0/24'  # Fallback default
         
         # CIDR format validation
         if not validate_cidr(network):
@@ -260,14 +367,59 @@ def scan_network():
 @app.route('/detailed-scan', methods=['POST'])
 def detailed_scan():
     """
-    Performs detailed network scan including hostname, vendor, and open ports.
-    This is slower than regular scan but provides more information.
+    Full scan + Hostname + Vendor + Ports (slower)
+    ---
+    tags:
+      - Network Discovery
+    parameters:
+      - name: network
+        in: query
+        type: string
+        default: "192.168.1.0/24"
+        description: CIDR format (e.g., 192.168.0.0/24)
+    responses:
+      200:
+        description: Devices with hostname, vendor, open ports
+        examples:
+          application/json:
+            message: "Detailed scan completed"
+            count: 2
+            network_scanned: "192.168.0.0/24"
+            devices:
+              - ip: "192.168.0.1"
+                mac: "18:34:af:a4:c3:68"
+                status: "ONLINE"
+                hostname: "router.lan"
+                vendor: "Cisco Systems"
+                open_ports:
+                  - port: 80
+                    service: "HTTP"
+                  - port: 443
+                    service: "HTTPS"
+                ports_count: 2
+              - ip: "192.168.0.10"
+                mac: "b8:27:eb:12:34:56"
+                status: "ONLINE"
+                hostname: "raspberrypi.local"
+                vendor: "Raspberry Pi Foundation"
+                open_ports:
+                  - port: 22
+                    service: "SSH"
+                ports_count: 1
+      400:
+        description: Invalid CIDR format
     """
     global discovered_devices
     
     try:
-        # Get network from query parameters
-        network = request.args.get('network', '192.168.1.0/24')
+        # Get network from query parameters or auto-detect
+        network = request.args.get('network')
+        if not network:
+            network_info = detect_local_network()
+            if network_info:
+                network = network_info['network']
+            else:
+                network = '192.168.1.0/24'  # Fallback default
         
         # CIDR format validation
         if not validate_cidr(network):
@@ -326,7 +478,29 @@ def detailed_scan():
 
 @app.route('/devices', methods=['GET'])
 def get_devices():
-    """Returns the stored list of devices."""
+    """
+    List discovered devices
+    ---
+    tags:
+      - Device Management
+    responses:
+      200:
+        description: Array of discovered devices
+        examples:
+          application/json:
+            - ip: "192.168.0.1"
+              mac: "00:11:22:33:44:55"
+              status: "ONLINE"
+              hostname: "router.lan"
+              vendor: "Cisco Systems"
+            - ip: "192.168.0.10"
+              mac: "aa:bb:cc:dd:ee:ff"
+              status: "ONLINE"
+              hostname: null
+              vendor: "Apple Inc."
+      404:
+        description: No devices (scan first)
+    """
     try:
         with devices_lock:
             if not discovered_devices:
@@ -343,8 +517,29 @@ def get_devices():
 @app.route('/monitor', methods=['POST'])
 def monitor_devices():
     """
-    Iterates through the known list of devices and pings them
-    to update their status and response time.
+    Check status & latency of known devices
+    ---
+    tags:
+      - Device Management
+    responses:
+      200:
+        description: Devices with updated status and latency
+        examples:
+          application/json:
+            - ip: "192.168.0.1"
+              mac: "00:11:22:33:44:55"
+              status: "ONLINE"
+              latency_ms: 2.45
+              hostname: "router.lan"
+              vendor: "Cisco Systems"
+            - ip: "192.168.0.10"
+              mac: "aa:bb:cc:dd:ee:ff"
+              status: "OFFLINE"
+              latency_ms: null
+              hostname: null
+              vendor: "Apple Inc."
+      400:
+        description: No devices (scan first)
     """
     global discovered_devices
     
@@ -360,8 +555,8 @@ def monitor_devices():
         
         updated_devices = []
         for device in devices_to_check:
-            # Ping (timeout 0.5s for speed)
-            lat = ping_host(device['ip'], timeout=0.5)
+            # Ping (timeout 1s - some devices block ICMP)
+            lat = ping_host(device['ip'], timeout=1)
             
             if lat is None:
                 device['status'] = "OFFLINE"
