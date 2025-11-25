@@ -28,6 +28,7 @@ Access interactive API documentation at: **http://127.0.0.1:4000/api-docs**
 |----------|--------|---------|-------|
 | `/` | GET | Welcome message | Instant |
 | `/detect-network` | GET | Auto-detect local network | Instant |
+| `/network-info` | GET | Detailed network info (gateway, DNS, speed) | Fast (~2-3s) |
 | `/scan` | POST | Basic ARP scan (IP, MAC, Status) | Fast (~2-3s) |
 | `/detailed-scan` | POST | Full scan + Hostname + Vendor + Ports | Slow (~30-60s) |
 | `/devices` | GET | List discovered devices | Instant |
@@ -40,6 +41,11 @@ Access interactive API documentation at: **http://127.0.0.1:4000/api-docs**
 ### Detect Network
 ```bash
 curl http://127.0.0.1:4000/detect-network
+```
+
+### Network Information
+```bash
+curl http://127.0.0.1:4000/network-info
 ```
 
 ### Basic Scan
@@ -106,6 +112,24 @@ curl http://127.0.0.1:4000/devices
 }
 ```
 
+### Network Info Response
+```json
+{
+  "local_ip": "192.168.0.100",
+  "network": "192.168.0.0/24",
+  "netmask": "255.255.255.0",
+  "cidr": 24,
+  "gateway": "192.168.0.1",
+  "interface": "en0",
+  "interface_mac": "a4:83:e7:5f:2e:c1",
+  "hostname": "Mac.local",
+  "dns_servers": ["192.168.0.1", "8.8.8.8"],
+  "gateway_latency_ms": 2.34,
+  "internet_latency_ms": 15.67,
+  "internet_status": "Connected"
+}
+```
+
 ---
 
 ## Workflows
@@ -133,6 +157,7 @@ done
 ✅ Device identification (hostname, vendor)  
 ✅ Port scanning (security audit)  
 ✅ Network auto-detection  
+✅ **Detailed network info (gateway, DNS, latency, internet status)**  
 ✅ Status monitoring with latency  
 ✅ Thread-safe operations  
 ✅ No root required (for most features)  

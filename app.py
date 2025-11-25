@@ -237,6 +237,112 @@ def perform_arp_scan(ip_range):
         print(f"Scapy error: {e}")
         return []
 
+def get_network_info():
+    """
+    Gathers detailed network information including interface details,
+    gateway, DNS servers, and network speed.
+    """
+    try:
+        network_info = {}
+        
+        # Get local IP and basic network info
+        local_network = detect_local_network()
+        if local_network:
+            network_info.update(local_network)
+        
+        # Get default gateway
+        try:
+            if platform.system().lower() == 'darwin' or platform.system().lower() == 'linux':
+                result = subprocess.run(['route', '-n', 'get', 'default'], 
+                                      capture_output=True, text=True, timeout=2)
+                for line in result.stdout.split('\n'):
+                    if 'gateway:' in line.lower():
+                        network_info['gateway'] = line.split(':')[1].strip()
+                    elif 'interface:' in line.lower():
+                        network_info['interface'] = line.split(':')[1].strip()
+            elif platform.system().lower() == 'windows':
+                result = subprocess.run(['route', 'print', '0.0.0.0'], 
+                                      capture_output=True, text=True, timeout=2)
+                # Parse Windows route output for gateway
+                lines = result.stdout.split('\n')
+                for line in lines:
+                    if '0.0.0.0' in line and '0.0.0.0' in line.split()[0]:
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            network_info['gateway'] = parts[2]
+        except Exception as e:
+            print(f"Gateway detection error: {e}")
+        
+        # Get DNS servers
+        try:
+            dns_servers = []
+            if platform.system().lower() == 'darwin':
+                result = subprocess.run(['scutil', '--dns'], 
+                                      capture_output=True, text=True, timeout=2)
+                for line in result.stdout.split('\n'):
+                    if 'nameserver' in line.lower():
+                        dns = line.split(':')[1].strip() if ':' in line else line.split()[-1]
+                        if dns and dns not in dns_servers:
+                            dns_servers.append(dns)
+            elif platform.system().lower() == 'linux':
+                with open('/etc/resolv.conf', 'r') as f:
+                    for line in f:
+                        if line.startswith('nameserver'):
+                            dns = line.split()[1]
+                            dns_servers.append(dns)
+            elif platform.system().lower() == 'windows':
+                result = subprocess.run(['ipconfig', '/all'], 
+                                      capture_output=True, text=True, timeout=2)
+                for line in result.stdout.split('\n'):
+                    if 'DNS Servers' in line:
+                        dns = line.split(':')[1].strip()
+                        dns_servers.append(dns)
+            
+            network_info['dns_servers'] = dns_servers[:3] if dns_servers else []
+        except Exception as e:
+            print(f"DNS detection error: {e}")
+            network_info['dns_servers'] = []
+        
+        # Test internet speed (ping to gateway and external)
+        try:
+            gateway_ip = network_info.get('gateway', '8.8.8.8')
+            gateway_latency = ping_host(gateway_ip, timeout=2)
+            network_info['gateway_latency_ms'] = round(gateway_latency * 1000, 2) if gateway_latency else None
+            
+            # Ping external (Google DNS)
+            external_latency = ping_host('8.8.8.8', timeout=2)
+            network_info['internet_latency_ms'] = round(external_latency * 1000, 2) if external_latency else None
+            network_info['internet_status'] = 'Connected' if external_latency else 'Disconnected'
+        except Exception as e:
+            print(f"Speed test error: {e}")
+        
+        # Get hostname
+        try:
+            network_info['hostname'] = socket.gethostname()
+        except Exception:
+            pass
+        
+        # Get MAC address of primary interface
+        try:
+            if 'interface' in network_info:
+                if platform.system().lower() == 'darwin' or platform.system().lower() == 'linux':
+                    result = subprocess.run(['ifconfig', network_info['interface']], 
+                                          capture_output=True, text=True, timeout=2)
+                    for line in result.stdout.split('\n'):
+                        if 'ether' in line.lower() or 'hwaddr' in line.lower():
+                            parts = line.split()
+                            for i, part in enumerate(parts):
+                                if ':' in part and len(part) == 17:
+                                    network_info['interface_mac'] = part
+                                    break
+        except Exception as e:
+            print(f"MAC detection error: {e}")
+        
+        return network_info
+    except Exception as e:
+        print(f"Network info error: {e}")
+        return None
+
 @app.route('/')
 def index():
     """
@@ -293,6 +399,48 @@ def detect_network():
     except Exception as e:
         return jsonify({
             "error": "An error occurred while detecting network",
+            "details": str(e)
+        }), 500
+
+@app.route('/network-info', methods=['GET'])
+def network_info():
+    """
+    Detailed network information (gateway, DNS, speed, interface)
+    ---
+    tags:
+      - Network Discovery
+    responses:
+      200:
+        description: Comprehensive network information
+        examples:
+          application/json:
+            local_ip: "192.168.0.100"
+            network: "192.168.0.0/24"
+            netmask: "255.255.255.0"
+            cidr: 24
+            gateway: "192.168.0.1"
+            interface: "en0"
+            interface_mac: "a4:83:e7:5f:2e:c1"
+            hostname: "Mac.local"
+            dns_servers: ["192.168.0.1", "8.8.8.8"]
+            gateway_latency_ms: 2.34
+            internet_latency_ms: 15.67
+            internet_status: "Connected"
+      500:
+        description: Failed to get network info
+    """
+    try:
+        info = get_network_info()
+        
+        if info is None:
+            return jsonify({
+                "error": "Failed to retrieve network information"
+            }), 500
+        
+        return jsonify(info)
+    except Exception as e:
+        return jsonify({
+            "error": "An error occurred while retrieving network info",
             "details": str(e)
         }), 500
 
