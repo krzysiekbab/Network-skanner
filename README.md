@@ -44,11 +44,13 @@ curl http://127.0.0.1:4000/detect-network
 
 ### Basic Scan
 ```bash
+curl -X POST "http://127.0.0.1:4000/scan"
 curl -X POST "http://127.0.0.1:4000/scan?network=192.168.0.0/24"
 ```
 
 ### Detailed Scan (Hostname, Vendor, Ports)
 ```bash
+curl -X POST "http://127.0.0.1:4000/detailed-scan"
 curl -X POST "http://127.0.0.1:4000/detailed-scan?network=192.168.0.0/24"
 ```
 
@@ -115,12 +117,6 @@ curl -X POST "http://127.0.0.1:4000/scan?network=192.168.0.0/24"
 curl http://127.0.0.1:4000/devices
 ```
 
-**Security Audit:**
-```bash
-curl -X POST "http://127.0.0.1:4000/detailed-scan?network=192.168.0.0/24"
-curl http://127.0.0.1:4000/devices | jq '.[] | select(.ports_count > 0)'
-```
-
 **Continuous Monitoring:**
 ```bash
 while true; do
@@ -144,22 +140,3 @@ done
 
 ---
 
-## Dependencies
-
-- Flask 3.0.0 - Web framework
-- Scapy 2.5.0 - ARP scanning
-- mac-vendor-lookup 0.1.12 - Vendor identification
-- flasgger 0.9.7.1 - Swagger/OpenAPI documentation
-- flask-swagger-ui 4.11.1 - Swagger UI interface
-
-Install: `pip install -r requirements.txt`
-
----
-
-## Notes
-
-- CIDR format required: `192.168.0.0/24`
-- ARP scanning may require sudo on some systems
-- Port scanning: 21, 22, 23, 25, 80, 443, 445, 3389, 8080, 8443
-- `/scan` discovers devices, `/monitor` tracks known devices
-- **Many devices (iPhones, Macs, IoT) block ICMP ping** - they may show OFFLINE in `/monitor` even when connected. This is normal security behavior. Use `/scan` or `/detailed-scan` for accurate device discovery.
