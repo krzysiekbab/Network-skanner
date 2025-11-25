@@ -29,8 +29,8 @@ Access interactive API documentation at: **http://127.0.0.1:4000/api-docs**
 | `/` | GET | Welcome message | Instant |
 | `/detect-network` | GET | Auto-detect local network | Instant |
 | `/network-info` | GET | Detailed network info (gateway, DNS, speed) | Fast (~2-3s) |
-| `/scan` | POST | Basic ARP scan (IP, MAC, Status) | Fast (~2-3s) |
-| `/detailed-scan` | POST | Full scan + Hostname + Vendor + Ports | Slow (~30-60s) |
+| `/scan` | POST | Basic ARP scan (auto-detects network) | Fast (~2-3s) |
+| `/detailed-scan` | POST | Full scan + Hostname + Vendor + Ports (auto-detects network) | Slow (~30-60s) |
 | `/devices` | GET | List discovered devices | Instant |
 | `/monitor` | POST | Check status & latency of known devices | Fast (~5-10s) |
 
@@ -51,13 +51,11 @@ curl http://127.0.0.1:4000/network-info
 ### Basic Scan
 ```bash
 curl -X POST "http://127.0.0.1:4000/scan"
-curl -X POST "http://127.0.0.1:4000/scan?network=192.168.0.0/24"
 ```
 
 ### Detailed Scan (Hostname, Vendor, Ports)
 ```bash
 curl -X POST "http://127.0.0.1:4000/detailed-scan"
-curl -X POST "http://127.0.0.1:4000/detailed-scan?network=192.168.0.0/24"
 ```
 
 ### Monitor Devices
@@ -137,7 +135,7 @@ curl http://127.0.0.1:4000/devices
 **Quick Discovery:**
 ```bash
 curl http://127.0.0.1:4000/detect-network
-curl -X POST "http://127.0.0.1:4000/scan?network=192.168.0.0/24"
+curl -X POST "http://127.0.0.1:4000/scan"
 curl http://127.0.0.1:4000/devices
 ```
 
@@ -154,9 +152,9 @@ done
 ## Features
 
 ✅ Fast ARP network scanning  
+✅ **Automatic network detection** (no manual configuration needed)  
 ✅ Device identification (hostname, vendor)  
 ✅ Port scanning (security audit)  
-✅ Network auto-detection  
 ✅ **Detailed network info (gateway, DNS, latency, internet status)**  
 ✅ Status monitoring with latency  
 ✅ Thread-safe operations  

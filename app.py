@@ -447,16 +447,10 @@ def network_info():
 @app.route('/scan', methods=['POST'])
 def scan_network():
     """
-    Basic ARP scan (IP, MAC, Status)
+    Basic ARP scan (IP, MAC, Status) - Auto-detects network
     ---
     tags:
       - Network Discovery
-    parameters:
-      - name: network
-        in: query
-        type: string
-        default: "192.168.1.0/24"
-        description: CIDR format (e.g., 192.168.0.0/24)
     responses:
       200:
         description: Devices found with IP, MAC, status
@@ -472,26 +466,20 @@ def scan_network():
               - ip: "192.168.0.10"
                 mac: "aa:bb:cc:dd:ee:ff"
                 status: "ONLINE"
-      400:
-        description: Invalid CIDR format
+      500:
+        description: Network detection failed
     """
     global discovered_devices
     
     try:
-        # Get network from query parameters or auto-detect
-        network = request.args.get('network')
-        if not network:
-            network_info = detect_local_network()
-            if network_info:
-                network = network_info['network']
-            else:
-                network = '192.168.1.0/24'  # Fallback default
-        
-        # CIDR format validation
-        if not validate_cidr(network):
+        # Auto-detect network
+        network_info = detect_local_network()
+        if not network_info:
             return jsonify({
-                "error": "Invalid network format. Use CIDR format (e.g., 192.168.1.0/24)"
-            }), 400
+                "error": "Failed to detect local network"
+            }), 500
+        
+        network = network_info['network']
         
         print(f"Scanning network: {network}...")
         results = perform_arp_scan(network)
@@ -515,16 +503,10 @@ def scan_network():
 @app.route('/detailed-scan', methods=['POST'])
 def detailed_scan():
     """
-    Full scan + Hostname + Vendor + Ports (slower)
+    Full scan + Hostname + Vendor + Ports (slower) - Auto-detects network
     ---
     tags:
       - Network Discovery
-    parameters:
-      - name: network
-        in: query
-        type: string
-        default: "192.168.1.0/24"
-        description: CIDR format (e.g., 192.168.0.0/24)
     responses:
       200:
         description: Devices with hostname, vendor, open ports
@@ -554,26 +536,20 @@ def detailed_scan():
                   - port: 22
                     service: "SSH"
                 ports_count: 1
-      400:
-        description: Invalid CIDR format
+      500:
+        description: Network detection failed
     """
     global discovered_devices
     
     try:
-        # Get network from query parameters or auto-detect
-        network = request.args.get('network')
-        if not network:
-            network_info = detect_local_network()
-            if network_info:
-                network = network_info['network']
-            else:
-                network = '192.168.1.0/24'  # Fallback default
-        
-        # CIDR format validation
-        if not validate_cidr(network):
+        # Auto-detect network
+        network_info = detect_local_network()
+        if not network_info:
             return jsonify({
-                "error": "Invalid network format. Use CIDR format (e.g., 192.168.1.0/24)"
-            }), 400
+                "error": "Failed to detect local network"
+            }), 500
+        
+        network = network_info['network']
         
         print(f"Performing detailed scan on network: {network}...")
         
